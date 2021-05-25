@@ -1,12 +1,12 @@
 import beans.YandexSpellerAnswer;
+import constants.AnswerField;
 import constants.Language;
 import core.DataProvidersForSpeller;
+import io.restassured.http.Method;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.StringJoiner;
-import java.util.stream.Collectors;
 
 import static constants.ErrorCode.ERROR_UNKNOWN_WORD;
 import static constants.Format.HTML;
@@ -18,7 +18,7 @@ import static constants.Texts.ENG_CORRECT;
 import static constants.Texts.RUS_MISSPELLED;
 import static core.YandexSpellerServiceObj.*;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.*;
 
 public class YandexSpellerApiTests {
 
@@ -29,23 +29,24 @@ public class YandexSpellerApiTests {
                 requestBuilder()
                         .setLanguage(language)
                         .setText(text)
+                        .setMethod(Method.POST)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API reported errors in correct text: " + result, result.isEmpty());
     }
 
-    //BUG WAS FOUND
+    //BUGS WERE FOUND
     @Test(dataProvider = "misspelledTextsProvider",
             dataProviderClass = DataProvidersForSpeller.class)
     public void checkMisspelledTexts(Language language, String text) {
-        List<String> result = getStringResult(
+        YandexSpellerAnswer result = getTheOnlyAnswer(
                 requestBuilder()
                         .setLanguage(language)
                         .setText(text)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API failed to find spelling error in text: " + text,
-                result.contains(text));
+                result, hasProperty(AnswerField.CODE.name, is(ERROR_UNKNOWN_WORD.code)));
     }
 
     @Test
@@ -55,7 +56,7 @@ public class YandexSpellerApiTests {
                         .setLanguage(RUSSIAN)
                         .setText(RUS_MISSPELLED)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
             assertThat("API displays wrong error code: " + answers.get(0).getCode() + " instead of: "
                     + ERROR_UNKNOWN_WORD.code, answers.get(0).getCode() == ERROR_UNKNOWN_WORD.code);
     }
@@ -69,23 +70,24 @@ public class YandexSpellerApiTests {
                         .setLanguage(language)
                         .setText(text)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API failed to find error in text with digits: " + text,
                 result.contains(text));
     }
 
-    //BUGS WERE FOUND
     @Test(dataProvider = "textsWithLinksProvider",
             dataProviderClass = DataProvidersForSpeller.class)
     public void checkIncorrectTextsWithLinks(Language language, String text) {
-        List<String> result = getStringResult(
+        YandexSpellerAnswer result = getTheOnlyAnswer(
                 requestBuilder()
                         .setLanguage(language)
                         .setText(text)
                         .buildRequest()
-                        .sendGetRequest());
-        assertThat("API failed to find error in text with URL: " + text,
-                result.contains(text));
+                        .sendRequest());
+        assertThat("API failed to find error in text",
+                result,
+                allOf((hasProperty(AnswerField.CODE.name, is (ERROR_UNKNOWN_WORD.code))),
+                                        hasProperty(AnswerField.SUGGEST.name, not(emptyArray()))));
     }
 
     //BUGS WERE FOUND
@@ -97,7 +99,7 @@ public class YandexSpellerApiTests {
                         .setLanguage(language)
                         .setText(text)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API failed to find error in proper name with lower case: " + text,
                 result.contains(text));
     }
@@ -108,7 +110,7 @@ public class YandexSpellerApiTests {
                 .setLanguage(INCORRECT_LANGUAGE)
                 .setText(ENG_CORRECT)
                 .buildRequest()
-                .sendGetRequest()
+                .sendRequest()
                 .then().assertThat()
                 .spec(badResponseSpecification())
                 .body(containsString("SpellerService: Invalid parameter 'lang'"));
@@ -123,7 +125,7 @@ public class YandexSpellerApiTests {
                         .setText(text)
                         .setOptions(IGNORE_DIGITS)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API reported errors in text with digits despite 'ignore digits' option: " + result,
                 result.isEmpty());
     }
@@ -137,7 +139,7 @@ public class YandexSpellerApiTests {
                         .setText(text)
                         .setOptions(IGNORE_URLS)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API reported errors in text with URL despite 'ignore URLs' option: "
                 + result, result.isEmpty());
     }
@@ -149,7 +151,7 @@ public class YandexSpellerApiTests {
                 .setText(ENG_CORRECT)
                 .setFormat(HTML)
                 .buildRequest()
-                .sendGetRequest()
+                .sendRequest()
                 .then().assertThat()
                 .spec(goodResponseSpecification());
     }
@@ -161,25 +163,32 @@ public class YandexSpellerApiTests {
                 .setText(ENG_CORRECT)
                 .setFormat(INCORRECT_FORMAT)
                 .buildRequest()
-                .sendGetRequest()
+                .sendRequest()
                 .then().assertThat()
                 .spec(badResponseSpecification())
                 .and()
                 .body(containsString("SpellerService: Invalid parameter 'format'"));
     }
 
-    //BUG WAS FOUND
     @Test(dataProvider = "mixOfMisspelledTextsAndLanguagesProvider",
             dataProviderClass = DataProvidersForSpeller.class)
     public void checkMixOfLanguagesForMisspelledTexts(Language[] languages, String[] texts) {
-        List<String> result = getStringResult(
+        List<YandexSpellerAnswer> result = getAnswers(
                 requestBuilder()
                         .setLanguage(languages)
                         .setText(texts)
                         .buildRequest()
-                        .sendGetRequest());
+                        .sendRequest());
         assertThat("API failed to find 1 or more error(s) in the mix of texts: "
-                + Arrays.toString(texts) + " in following languages: "
-                + Arrays.toString(languages), result.size() == texts.length);
+                        + Arrays.toString(texts) + " in following languages: "
+                        + Arrays.toString(languages),
+                result, hasSize(texts.length));
+
+        assertThat("API failed to find error in text",
+                result,
+                allOf(hasSize(texts.length),
+                        everyItem(
+                                allOf((hasProperty("code", is (1))),
+                                        hasProperty("s", not(emptyArray()))))));
     }
 }

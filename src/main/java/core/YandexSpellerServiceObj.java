@@ -24,7 +24,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static constants.ParameterName.*;
-import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
 
 public class YandexSpellerServiceObj {
 
@@ -48,6 +49,11 @@ public class YandexSpellerServiceObj {
         private Map<String, String> parameters = new HashMap<>();
         private Method requestMethod = Method.GET;
 
+        public ApiRequestBuilder setMethod (Method method){
+            requestMethod = method;
+            return this;
+        }
+
         public ApiRequestBuilder setLanguage(Language... lang) {
             parameters.put(LANGUAGE, Arrays.stream(lang).map(l->l.value).collect(Collectors.joining(", ")));
             return this;
@@ -70,24 +76,11 @@ public class YandexSpellerServiceObj {
             return this;
         }
 
-        public ApiRequestBuilder setMethod(Method method){
-            requestMethod = method;
-            return this;
-        }
-
         public YandexSpellerServiceObj buildRequest() {
             return new YandexSpellerServiceObj(parameters, requestMethod);
         }
     }
     //ENDING OF BUILDER PATTERN
-
-    public Response sendGetRequest() {
-        return RestAssured
-                .given(requestSpecification()).log().all()
-                .queryParams(parameters)
-                .request(requestMethod ,SPELLER_URI)
-                .prettyPeek();
-    }
 
     public Response sendRequest() {
         return RestAssured
@@ -95,6 +88,14 @@ public class YandexSpellerServiceObj {
                 .queryParams(parameters)
                 .request(requestMethod ,SPELLER_URI)
                 .prettyPeek();
+    }
+
+    public static YandexSpellerAnswer getTheOnlyAnswer(Response response){
+        List<YandexSpellerAnswer> answers = new Gson()
+                .fromJson(response.asString().trim(), new TypeToken<List<YandexSpellerAnswer>>() {
+                }.getType());
+        assertThat ("We expect to get one answer, but got " + answers.size(), answers, hasSize(1));
+        return answers.get(0);
     }
 
     public static List<YandexSpellerAnswer> getAnswers(Response response) {
