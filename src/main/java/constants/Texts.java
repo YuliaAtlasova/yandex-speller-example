@@ -19,4 +19,5 @@ public class Texts {
     public static final String ENG_NO_CAPITALS = "london";
     public static final String ENG_CORRECT = "Hello";
     public static final String ENG_MISSPELLED = "jnew";
+    public static final String ENG_MISSPELLED_CORRECTION = "new";
 }
